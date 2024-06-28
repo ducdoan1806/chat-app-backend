@@ -9,7 +9,7 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = "__all__"
+        fields = ["username", "email", "id", "profile"]
         extra_kwargs = {"password": {"write_only": True}}
 
     def get_profile(self, obj):
@@ -25,7 +25,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UserProfile
-        fields = "__all__"
+        fields = ["first_name", "last_name"]
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -43,6 +43,29 @@ class RegisterSerializer(serializers.ModelSerializer):
 
 
 class RoomSerializer(serializers.ModelSerializer):
+    message = serializers.SerializerMethodField()
+
+    def get_message(self, obj):
+        try:
+
+            qs_message = Message.objects.get(obj)
+            return MessageSerializer(qs_message, many=True).data
+        except Exception as e:
+            return None
+
     class Meta:
         model = Room
+        fields = "__all__"
+
+
+class MemberSerializer(serializers.ModelSerializer):
+    class Meta:
+        model: Member
+        fields = "__all__"
+
+
+class MessageSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model: Message
         fields = "__all__"

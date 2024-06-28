@@ -11,5 +11,4 @@ urlpatterns = [
     path("oauth2-info/", AuthInfo.as_view()),
     path("user/", UserProfileView.as_view(), name="user"),
     path("room/", RoomView.as_view(), name="room"),
-    # path("user-list/", UserList.as_view(), name="user-list"),
 ]

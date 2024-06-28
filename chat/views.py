@@ -1,4 +1,5 @@
 import sys, os, socketio
+from django.db.models import Count
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -56,6 +57,25 @@ def connect_to_server():
 
 
 connect_to_server()
+
+
+def check_room(user, userId):
+    room_with_users = (
+        Member.objects.filter(user_id__in=[user.data["id"], userId])
+        .values("room_id")
+        .annotate(user_count=Count("user_id"))
+        .filter(user_count=2)
+    )
+
+    for room in room_with_users:
+
+        room_id = room["room_id"]
+        user_ids_in_room = Member.objects.filter(room_id=room_id).values_list(
+            "user_id", flat=True
+        )
+        if set(user_ids_in_room) == {user.data["id"], int(userId)}:
+            return room_id
+    return None
 
 
 class StandardPagesPagination(PageNumberPagination):
@@ -124,14 +144,6 @@ class UserProfileView(APIView):
             user = request.user
             serializer = UserSerializer(user)
             data = serializer.data
-            data.pop("first_name")
-            data.pop("last_name")
-            data.pop("is_staff")
-            data.pop("groups")
-            data.pop("user_permissions")
-            data.pop("is_superuser")
-            data.pop("last_login")
-
             return Response(
                 {"status": True, "message": "Success", "data": data},
                 status=status.HTTP_200_OK,
@@ -146,28 +158,31 @@ class UserProfileView(APIView):
 class RoomView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def post(self, request):
+    def get(self, request):
         try:
             user = request.user
-
-            serializer_user = UserSerializer(user)
-            serializers = RoomSerializer(data=request.data)
-
-            if serializers.is_valid():
-                data = serializers.data
-                data_user = serializer_user.data
-                qs_user = User.objects.get(id=data_user.get("id", None))
-                newRoom = Room.objects.create(name=data["name"], user_created=qs_user)
-
+            user = UserSerializer(user)
+            userId = request.query_params.get("id")
+            room_id = check_room(user, userId)
+            # print(room_id)
+            if room_id is not None:
+                room = Room.objects.get(id=room_id)
+                room_serializer = RoomSerializer(room)
                 return Response(
                     {
                         "status": True,
-                        "message": "",
-                        "data": RoomSerializer(newRoom).data,
+                        "message": "Success",
+                        "data": room_serializer.data,
                     },
-                    status=status.HTTP_201_CREATED,
+                    status=status.HTTP_200_OK,
                 )
-
+            return Response(
+                {
+                    "status": False,
+                    "message": "Please create room",
+                },
+                status=status.HTTP_200_OK,
+            )
         except Exception as e:
             return Response(
                 {"status": False, "message": str(e)},
