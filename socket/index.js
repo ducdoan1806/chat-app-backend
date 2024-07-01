@@ -15,10 +15,11 @@ app.use(express.static("public"));
 // Handle socket connections
 io.on("connection", (socket) => {
   socket.on("user-list", (data) => {
-    console.log("data: ", data);
     io.emit("user-list", data);
   });
-
+  socket.on("room", (data) => {
+    io.emit("room", data);
+  });
   // Handle disconnections
   socket.on("disconnect", () => {
     console.log("A user disconnected");

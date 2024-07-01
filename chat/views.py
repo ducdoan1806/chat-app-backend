@@ -164,7 +164,6 @@ class RoomView(APIView):
             user = UserSerializer(user)
             userId = request.query_params.get("id")
             room_id = check_room(user, userId)
-            # print(room_id)
             if room_id is not None:
                 room = Room.objects.get(id=room_id)
                 room_serializer = RoomSerializer(room)
@@ -179,15 +178,18 @@ class RoomView(APIView):
             return Response(
                 {
                     "status": False,
-                    "message": "Please create room",
+                    "message": "No room",
                 },
-                status=status.HTTP_200_OK,
+                status=status.HTTP_400_BAD_REQUEST,
             )
         except Exception as e:
             return Response(
                 {"status": False, "message": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+    def post(self, request):
+        print()
 
 
 class UserList(viewsets.ModelViewSet):
