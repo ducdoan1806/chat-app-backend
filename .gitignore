@@ -1,2 +1,3 @@
 django.log
 socket/node_modules
+.vscode

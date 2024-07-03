@@ -13,7 +13,7 @@ from datetime import time
 from django.core.paginator import Paginator
 from django.db.models import Q
 from rest_framework import viewsets, permissions
-
+from rest_framework.decorators import action
 
 sio = socketio.Client()
 
@@ -130,10 +130,12 @@ class RegisterView(APIView):
                 )
 
         except Exception as e:
-            return Response(
-                {"status": False, "message": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+            exc_tb = sys.exc_info()
+            lineno = exc_tb.tb_lineno
+            file_path = exc_tb.tb_frame.f_code.co_filename
+            file_name = os.path.basename(file_path)
+            message = f"[{file_name}_{lineno}] {str(e)}"
+            return Response({status:False,"message":message}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class UserProfileView(APIView):
@@ -149,20 +151,55 @@ class UserProfileView(APIView):
                 status=status.HTTP_200_OK,
             )
         except Exception as e:
-            return Response(
-                {"status": False, "message": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+            exc_tb = sys.exc_info()
+            lineno = exc_tb.tb_lineno
+            file_path = exc_tb.tb_frame.f_code.co_filename
+            file_name = os.path.basename(file_path)
+            message = f"[{file_name}_{lineno}] {str(e)}"
+            return Response({status:False,"message":message}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-class RoomView(APIView):
+class RoomView(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
-
-    def get(self, request):
+    serializer_class = RoomSerializer
+    pagination_class = StandardPagesPagination
+    queryset = Room.objects.all()
+    def list(self, request):
         try:
             user = request.user
             user = UserSerializer(user)
-            userId = request.query_params.get("id")
+            qs_data = Room.objects.filter(member__user=user.data['id'])
+            
+            page_size = self.request.query_params.get("page_size")
+            self.pagination_class.page_size = (
+                int(page_size) if page_size is not None else 15
+            )
+
+            page = self.paginate_queryset(qs_data)
+
+            if page is not None:
+                serializer = self.get_serializer(page, many=True)
+                return self.get_paginated_response(serializer.data)
+
+            serializer = self.get_serializer(qs_data, many=True)
+            return Response(
+                {"status": True, "message": "Success",'data':serializer.data},
+                status=status.HTTP_200_OK,
+            )
+        except Exception as e:
+            exc_tb = sys.exc_info()
+            lineno = exc_tb.tb_lineno
+            file_path = exc_tb.tb_frame.f_code.co_filename
+            file_name = os.path.basename(file_path)
+            message = f"[{file_name}_{lineno}] {str(e)}"
+            return Response({status:False,"message":message}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+   
+    @action(methods=['get'], detail=False,url_path='check-room',url_name='checkRoom')
+    def checkRoom(self, request):
+        try:
+            user = request.user
+            user = UserSerializer(user)
+            userId = request.query_params.get("reciever_id")
             room_id = check_room(user, userId)
             if room_id is not None:
                 room = Room.objects.get(id=room_id)
@@ -183,13 +220,80 @@ class RoomView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         except Exception as e:
-            return Response(
-                {"status": False, "message": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            exc_tb = sys.exc_info()
+            lineno = exc_tb.tb_lineno
+            file_path = exc_tb.tb_frame.f_code.co_filename
+            file_name = os.path.basename(file_path)
+            message = f"[{file_name}_{lineno}] {str(e)}"
+            return Response({status:False,"message":message}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(methods=['post'], detail=False,url_path='create-room',url_name='createRoom')
+    def createRoom(self, request):
+        try:
+            sender = request.user
+            sender_serializer = UserSerializer(sender, many=False)
+
+            receiver_id = request.data["receiver_id"]
+            receiver = User.objects.filter(id=receiver_id).first()
+
+            if not receiver:
+                return Response(
+                {"status": False, "message": "receiver not found"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+            receiver_serializer = UserSerializer(receiver, many=False)
+            check = check_room(sender_serializer, receiver_id)
+           
+            if check:
+                return Response(
+                {"status": False, "message": "room already exist"},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
-    def post(self, request):
-        print()
+            room_data={ "name":f"{sender_serializer.data["profile"]['first_name']} {sender_serializer.data["profile"]['last_name']}, {receiver_serializer.data["profile"]['first_name']} {receiver_serializer.data["profile"]['last_name']}",'user_created':sender_serializer.data['id']}
+            room_serializer=RoomSerializer(data=room_data)
+            if not room_serializer.is_valid():
+                return Response(room_serializer.errors, status=status.HTTP_400_BAD_REQUEST)   
+            room = room_serializer.save()
+            
+            senderMember={ "user":sender_serializer.data['id'],"room":room.id}
+            senderMember_serializer=MemberSerializer(data=senderMember)
+            if not senderMember_serializer.is_valid():
+                 return Response(senderMember_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            senderMember_serializer.save()
+          
+            receiverMember={ "user":receiver_serializer.data['id'],"room":room.id}
+            receiverMember_serializer=MemberSerializer(data=receiverMember)
+            if not receiverMember_serializer.is_valid():
+                return Response(receiverMember_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            receiverMember_serializer.save()
+                
+            messageData={ "user":sender_serializer.data['id'],"room":room.id,"content":request.data["content"]}
+            message_serializer=MessageSerializer(data=messageData)
+            if not message_serializer.is_valid():
+                return Response(message_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            message_serializer.save()
+            
+            return Response(
+            {
+                "status": True,
+                "message": "Success",
+                "data": {
+            'room': RoomSerializer(room).data,
+            'message': message_serializer.data,
+            'sender': sender_serializer.data,
+            'reciever': receiver_serializer.data
+        }
+            },
+            status=status.HTTP_201_CREATED,
+        ) 
+        except Exception as e:
+            exc_tb = sys.exc_info()
+            lineno = exc_tb.tb_lineno
+            file_path = exc_tb.tb_frame.f_code.co_filename
+            file_name = os.path.basename(file_path)
+            message = f"[{file_name}_{lineno}] {str(e)}"
+            return Response({status:False,"message":message}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class UserList(viewsets.ModelViewSet):
@@ -234,4 +338,64 @@ class UserList(viewsets.ModelViewSet):
             file_path = exc_tb.tb_frame.f_code.co_filename
             file_name = os.path.basename(file_path)
             message = f"[{file_name}_{lineno}] {str(e)}"
-            return Response(message, status=status.HTTP_404_NOT_FOUND)
+            return Response({status:False,"message":message}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class MessageView(viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated]
+    serializer_class = MessageSerializer
+    queryset = Message.objects.all()
+
+    def list(self,request):
+        try:
+            room_id = request.query_params.get("room_id")
+            qs_data = Message.objects.filter(room=room_id)
+            page_size = self.request.query_params.get("page_size")
+            self.pagination_class.page_size = (
+                int(page_size) if page_size is not None else 15
+            )
+
+            page = self.paginate_queryset(qs_data)
+
+            if page is not None:
+                serializer = self.get_serializer(page, many=True)
+                return self.get_paginated_response(serializer.data)
+
+            serializer = self.get_serializer(qs_data, many=True)
+            return Response(
+                {"status": True, "message": "Success",'data':serializer.data},
+                status=status.HTTP_200_OK,
+            )
+        except Exception as e:
+            exc_tb = sys.exc_info()
+            lineno = exc_tb.tb_lineno
+            file_path = exc_tb.tb_frame.f_code.co_filename
+            file_name = os.path.basename(file_path)
+            message = f"[{file_name}_{lineno}] {str(e)}"
+            return Response({status:False,"message":message}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(methods=['post'], detail=False,url_path='create-message',url_name='createMessage')
+    def createMessage(self,request):
+        try:
+            user = request.user
+            
+            room_id = request.data.get("room_id")
+            content= request.data.get("content")
+            messageData={ "user":user.id,"room":room_id,"content":content}
+            message_serializer = MessageSerializer(data=messageData)
+            if not message_serializer.is_valid():
+                 return Response(
+                {"status": False, "message": "message is not created",},
+                status=status.HTTP_200_OK,
+            )
+            message_serializer.save()
+            return Response(
+                {"status": True, "message": "Success",'data':message_serializer.data},
+                status=status.HTTP_200_OK,
+            )
+        except Exception as e:
+            exc_tb = sys.exc_info()
+            lineno = exc_tb.tb_lineno
+            file_path = exc_tb.tb_frame.f_code.co_filename
+            file_name = os.path.basename(file_path)
+            message = f"[{file_name}_{lineno}] {str(e)}"
+            return Response({status:False,"message":message}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

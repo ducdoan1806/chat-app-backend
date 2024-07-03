@@ -44,14 +44,14 @@ class Member(models.Model):
         blank=True,
     )
     role = models.CharField(
-        max_length=20, default="MEMBER", choices=ACTION_CHOICES, null=True, blank=True
+        max_length=20, default="ADMIN", choices=ACTION_CHOICES, null=True, blank=True
     )
     room = models.ForeignKey(
         Room,
         blank=True,
         on_delete=models.CASCADE,
         null=True,
-        related_name="user_profile",
+        related_name="member",
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -61,8 +61,8 @@ class Member(models.Model):
 
 
 class Message(models.Model):
-    room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name="messages")
-    user = models.ForeignKey(User, on_delete=models.DO_NOTHING, related_name="messages")
+    room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name="room")
+    user = models.ForeignKey(User, on_delete=models.DO_NOTHING, related_name="user")
     content = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
