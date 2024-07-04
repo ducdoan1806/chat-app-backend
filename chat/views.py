@@ -36,7 +36,8 @@ def reconnect():
     for attempt in range(max_attempts):
         try:
             print(f"Reconnection attempt {attempt + 1}")
-            sio.connect("http://localhost:3000", wait=True, wait_timeout=10)
+            sio.connect("http://localhost:3000",transports=['websocket', 'polling'], wait=True, wait_timeout=10)
+            sio.wait()
             print("Reconnected successfully")
             return
         except socketio.exceptions.ConnectionError as e:
@@ -367,7 +368,14 @@ class MessageView(viewsets.ModelViewSet):
 
     def list(self,request):
         try:
+            user=request.user
             room_id = request.query_params.get("room_id")
+            qs_member = Member.objects.filter(user=user,room=room_id).exists()
+            if not qs_member:
+                return Response(
+                {"status": False, "message": "You don't join this room"},
+                status=status.HTTP_400_BAD_REQUEST,
+            ) 
             qs_data = Message.objects.filter(room=room_id)
             page_size = self.request.query_params.get("page_size")
             self.pagination_class.page_size = (
