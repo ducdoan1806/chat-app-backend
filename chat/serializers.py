@@ -44,6 +44,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 
 class RoomSerializer(serializers.ModelSerializer):
     messages = serializers.SerializerMethodField()
+    member = serializers.SerializerMethodField()
 
     class Meta:
         model = Room
@@ -54,26 +55,42 @@ class RoomSerializer(serializers.ModelSerializer):
             qs_message = Message.objects.filter(room=obj)
             return MessageSerializer(qs_message[0], many=False).data["content"]
         except Exception as e:
+            return None
 
+    def get_member(self, obj):
+        try:
+
+            qs_message = Member.objects.filter(room_id=obj)
+            members = MemberSerializer(qs_message, many=True).data
+
+            return members
+        except Exception as e:
             return None
 
 
 class MemberSerializer(serializers.ModelSerializer):
-    message = serializers.SerializerMethodField()
+    user_profile = serializers.SerializerMethodField()
 
     class Meta:
         model = Member
         fields = "__all__"
 
+    def get_user_profile(self, obj):
+        try:
+            qs_user = User.objects.get(username=obj.user)
+            return UserSerializer(qs_user, many=False).data
+        except Exception as e:
+            return None
+
 
 class MessageSerializer(serializers.ModelSerializer):
-    user = serializers.SerializerMethodField()
+    user_profile = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Message
         fields = "__all__"
 
-    def get_user(self, obj):
+    def get_user_profile(self, obj):
         try:
             qs_message = User.objects.get(user=obj)
             return UserSerializer(qs_message, many=False).data

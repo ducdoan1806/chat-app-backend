@@ -1,11 +1,10 @@
 // server.js
 const express = require("express");
 const http = require("http");
-const socketIo = require("socket.io");
 
 const app = express();
 const server = http.createServer(app);
-const io = socketIo(server);
+const socketIo = require("socket.io")(server, { cors: { origin: "*" } });
 
 const PORT = process.env.PORT || 3000;
 
@@ -13,12 +12,24 @@ const PORT = process.env.PORT || 3000;
 app.use(express.static("public"));
 
 // Handle socket connections
-io.on("connection", (socket) => {
+socketIo.on("connection", (socket) => {
   socket.on("user-list", (data) => {
-    io.emit("user-list", data);
+    socketIo.emit("user-list", data);
   });
-  socket.on("room", (data) => {
-    io.emit("room", data);
+  socket.on("join-room", ({ room, userId }) => {
+    socket.join(room);
+    socket.userId = userId;
+    console.log(`User ${userId} đã tham gia phòng: ${room}`);
+  });
+  socket.on("send-message", (data) => {
+    console.log("data: ", data);
+    socketIo.to(data.room).emit("recieve-message", {
+      userId: data.userId,
+      message: data.message,
+    });
+  });
+  socket.on("create-room", (data) => {
+    socketIo.emit("create-room", data);
   });
   // Handle disconnections
   socket.on("disconnect", () => {
