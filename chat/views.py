@@ -18,17 +18,14 @@ from rest_framework.decorators import action
 
 sio = socketio.Client()
 
-
 @sio.event
 def connect_error(data):
     print(f"Connection error: {data}")
     reconnect()
 
-
 @sio.event
 def disconnect():
     print("Disconnected from server")
-
 
 def reconnect():
     print("Attempting to reconnect...")
@@ -46,7 +43,6 @@ def reconnect():
             print(f"Reconnection failed: {e}")
             time.sleep(5)
 
-
 def connect_to_server():
     try:
         headers = {"cookie": "BE connect"}
@@ -57,9 +53,7 @@ def connect_to_server():
         print(f"Connection failed: {e}")
         reconnect()
 
-
 connect_to_server()
-
 
 def check_room(user, userId):
     room_with_users = (
@@ -78,17 +72,13 @@ def check_room(user, userId):
             return room_id
     return None
 
-
 class StandardPagesPagination(PageNumberPagination):
     page_size = 10
-
 
 class AuthInfo(APIView):
     def get(self, request):
         return Response(settings.OAUTH2_INFO, status=status.HTTP_200_OK)
 
-
-# Create your views here.
 class RegisterView(APIView):
     def post(self, request, *args, **kwargs):
         try:
@@ -141,7 +131,6 @@ class RegisterView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-
 class UserProfileView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -165,7 +154,6 @@ class UserProfileView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-
 class RoomView(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     serializer_class = RoomSerializer
@@ -176,12 +164,12 @@ class RoomView(viewsets.ModelViewSet):
             user = request.user
             user = UserSerializer(user)
             qs_data = Room.objects.filter(member__user=user.data['id'])
-            
             page_size = self.request.query_params.get("page_size")
             self.pagination_class.page_size = (
                 int(page_size) if page_size is not None else 15
             )
-            print(f"{qs_data}")
+            # qs_Message_room=Message.objects.all().values_list("room",flat=True).distinct()
+            # qs_data=qs_data.filter(id__in=qs_Message_room)
             page = self.paginate_queryset(qs_data)
 
             if page is not None:
@@ -204,40 +192,6 @@ class RoomView(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
    
-    @action(methods=['get'], detail=False,url_path='check-room',url_name='checkRoom')
-    def checkRoom(self, request):
-        try:
-            user = request.user
-            user = UserSerializer(user)
-            userId = request.query_params.get("reciever_id")
-            room_id = check_room(user, userId)
-            
-            if room_id is not None:
-                room = Room.objects.get(id=room_id)
-                room_serializer = RoomSerializer(room)
-                return Response(
-                    {
-                        "status": True,
-                        "message": "Success",
-                        "data": room_serializer.data,
-                    },
-                    status=status.HTTP_200_OK,
-                )
-            return Response(
-                {
-                    "status": False,
-                    "message": "No room",
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        except Exception as e:
-            exc_tb = sys.exc_info()
-            lineno = exc_tb.tb_lineno
-            file_path = exc_tb.tb_frame.f_code.co_filename
-            file_name = os.path.basename(file_path)
-            message = f"[{file_name}_{lineno}] {str(e)}"
-            return Response({status:False,"message":message}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
     @action(methods=['post'], detail=False,url_path='create-room',url_name='createRoom')
     def createRoom(self, request):
         try:
@@ -260,9 +214,10 @@ class RoomView(viewsets.ModelViewSet):
                 {"status": False, "message": "Cannot create a room with yourself."},
                 status=status.HTTP_400_BAD_REQUEST,)
             if check != None:
+                room_checked = Room.objects.get(id=check)
                 return Response(
-                {"status": False, "message": "room already exist"},
-                status=status.HTTP_400_BAD_REQUEST,
+                {"status": True, "message": "Success",'data':RoomSerializer(room_checked).data},
+                status=status.HTTP_200_OK,
             )
             with transaction.atomic():
                 room_data={ "name":f"{sender_serializer.data["profile"]['first_name']} {sender_serializer.data["profile"]['last_name']}, {receiver_serializer.data["profile"]['first_name']} {receiver_serializer.data["profile"]['last_name']}",'user_created':sender_serializer.data['id']}
@@ -283,22 +238,10 @@ class RoomView(viewsets.ModelViewSet):
                     return Response(receiverMember_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
                 receiverMember_serializer.save()
                     
-                messageData={ "user":sender_serializer.data['id'],"room":room.id,"content":request.data["content"]}
-                message_serializer=MessageSerializer(data=messageData)
-                if not message_serializer.is_valid():
-                    return Response(message_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-                message_serializer.save()
-                # sio.emit('create-room',{ 
-                #     'room': RoomSerializer(room).data,
-                #     'message': message_serializer.data
-                #     })
                 return Response({
                     "status": True,
                     "message": "Success",
-                    "data": {
-                    'room': RoomSerializer(room).data,
-                    'message': message_serializer.data,
-                }
+                    "data":RoomSerializer(room).data,
                     },
                     status=status.HTTP_201_CREATED,
                 ) 
@@ -313,7 +256,6 @@ class RoomView(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
             
-
 class UserList(viewsets.ModelViewSet):
     queryset = User.objects.all()
     permission_classes = [IsAuthenticated]

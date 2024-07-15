@@ -12,4 +12,17 @@ const createMessage = async ({ token, room, content }) => {
   return await res.json();
 };
 
-module.exports = { createMessage };
+const createRoomApi = async ({ receiver_id, token }) => {
+  const res = await fetch(`${API_URL}/room/create-room/`, {
+    method: "POST",
+
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: token,
+    },
+    body: JSON.stringify({ receiver_id }),
+  });
+  return await res.json();
+};
+
+module.exports = { createMessage, createRoomApi };
